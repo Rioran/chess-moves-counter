@@ -135,6 +135,113 @@ def sq_drop(ev):
     render()
 
 
+# ── Touch drag ─────────────────────────────────────────────────────────────────
+_touch = {}
+
+
+def _sq_from_point(x, y):
+    """Return the board square element at viewport coordinates (x, y), or None."""
+    ghost = _touch.get("ghost")
+    if ghost:
+        ghost.style.display = "none"
+    el = document.elementFromPoint(x, y)
+    if ghost:
+        ghost.style.display = ""
+    return find_sq(el)
+
+
+def touch_start(ev):
+    """Start a touch drag from a piece element (panel or board)."""
+    if _touch:
+        return  # another finger already dragging
+    ev.preventDefault()
+    if not ev.touches.length:
+        return
+    touch = ev.touches[0]
+    target = ev.target
+    piece = target.attrs.get("data-piece")
+    if not piece:
+        return
+    if "data-row" in target.attrs:
+        _touch.update(
+            {
+                "type": "board",
+                "piece": piece,
+                "row": int(target.attrs["data-row"]),
+                "col": int(target.attrs["data-col"]),
+            }
+        )
+    else:
+        _touch.update({"type": "panel", "piece": piece})
+    sq_el = document.querySelector(".square")
+    size = int(sq_el.offsetWidth) if sq_el else 42
+    _touch["size"] = size
+    color_cls = "piece-w" if piece[0] == "w" else "piece-b"
+    ghost = html.SPAN(glyph(piece))
+    ghost.classList.add("touch-ghost")
+    ghost.classList.add(color_cls)
+    ghost.style.fontSize = f"{size}px"
+    ghost.style.left = f"{touch.clientX - size // 2}px"
+    ghost.style.top = f"{touch.clientY - size}px"
+    document.body <= ghost
+    _touch["ghost"] = ghost
+
+
+def touch_move(ev):
+    """Move the ghost element and highlight the square under the finger."""
+    if not _touch:
+        return
+    ev.preventDefault()
+    touch = ev.touches[0]
+    ghost = _touch.get("ghost")
+    size = _touch.get("size", 42)
+    if ghost:
+        ghost.style.left = f"{touch.clientX - size // 2}px"
+        ghost.style.top = f"{touch.clientY - size}px"
+    sq = _sq_from_point(touch.clientX, touch.clientY)
+    clear_hover()
+    if sq:
+        sq.classList.add("drag-over")
+        rank = str(8 - int(sq.attrs["data-row"]))
+        file_chr = chr(ord("a") + int(sq.attrs["data-col"]))
+        for label in document.querySelectorAll(f'[data-rank="{rank}"]'):
+            label.classList.add("label-highlight")
+        for label in document.querySelectorAll(f'[data-file="{file_chr}"]'):
+            label.classList.add("label-highlight")
+
+
+def touch_end(ev):
+    """Drop the piece on the square under the finger, or remove it if off-board."""
+    if not _touch:
+        return
+    ev.preventDefault()
+    ghost = _touch.pop("ghost", None)
+    if ghost:
+        ghost.parent.remove(ghost)
+    clear_hover()
+    touch = ev.changedTouches[0]
+    sq = _sq_from_point(touch.clientX, touch.clientY)
+    piece = _touch.get("piece")
+    if not piece:
+        _touch.clear()
+        return
+    if sq:
+        dr = int(sq.attrs["data-row"])
+        dc = int(sq.attrs["data-col"])
+        if _touch.get("type") == "board":
+            sr, sc = _touch["row"], _touch["col"]
+            if not (sr == dr and sc == dc):
+                state.board[sr][sc] = None
+        state.board[dr][dc] = piece
+        drop_stats()
+        render()
+    elif _touch.get("type") == "board":
+        state.board[_touch["row"]][_touch["col"]] = None
+        drop_stats()
+        render()
+    _touch.clear()
+
+
 def build_panel(color):
     """Build and return the draggable piece panel for the given color ('w'/'b')."""
     panel = html.DIV(Class="piece-panel")
@@ -147,6 +254,9 @@ def build_panel(color):
         item.attrs["data-piece"] = code
         item.bind("dragstart", panel_dragstart)
         item.bind("dragend", any_dragend)
+        item.bind("touchstart", touch_start)
+        item.bind("touchmove", touch_move)
+        item.bind("touchend", touch_end)
         panel <= item
     return panel
 
@@ -198,6 +308,9 @@ def build_board():
                 span.attrs["data-col"] = str(col)
                 span.bind("dragstart", board_dragstart)
                 span.bind("dragend", any_dragend)
+                span.bind("touchstart", touch_start)
+                span.bind("touchmove", touch_move)
+                span.bind("touchend", touch_end)
                 sq <= span
 
             # Move-count badge
