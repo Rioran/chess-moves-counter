@@ -1,4 +1,4 @@
-from browser import document, html, bind
+from browser import document, html, bind, timer
 
 from constants import ORDER, W_CHR, B_CHR, START
 from state import state
@@ -157,7 +157,7 @@ def touch_start(ev):
     ev.preventDefault()
     if not ev.touches.length:
         return
-    touch = ev.touches[0]
+    touch = ev.touches.item(0)
     target = ev.target
     piece = target.attrs.get("data-piece")
     if not piece:
@@ -192,7 +192,7 @@ def touch_move(ev):
     if not _touch:
         return
     ev.preventDefault()
-    touch = ev.touches[0]
+    touch = ev.touches.item(0)
     ghost = _touch.get("ghost")
     size = _touch.get("size", 42)
     if ghost:
@@ -214,32 +214,30 @@ def touch_end(ev):
     """Drop the piece on the square under the finger, or remove it if off-board."""
     if not _touch:
         return
-    ev.preventDefault()
-    ghost = _touch.pop("ghost", None)
-    if ghost:
-        ghost.parent.remove(ghost)
-    clear_hover()
-    touch = ev.changedTouches[0]
-    sq = _sq_from_point(touch.clientX, touch.clientY)
-    piece = _touch.get("piece")
-    if not piece:
+    try:
+        ev.preventDefault()
+        ghost = _touch.pop("ghost", None)
+        if ghost:
+            ghost.style.display = "none"
+        clear_hover()
+        touch = ev.changedTouches.item(0)
+        sq = _sq_from_point(touch.clientX, touch.clientY)
+        piece = _touch.get("piece")
+        if piece:
+            if sq:
+                dr = int(sq.attrs["data-row"])
+                dc = int(sq.attrs["data-col"])
+                if _touch.get("type") == "board":
+                    sr, sc = _touch["row"], _touch["col"]
+                    if not (sr == dr and sc == dc):
+                        state.board[sr][sc] = None
+                state.board[dr][dc] = piece
+            elif _touch.get("type") == "board":
+                state.board[_touch["row"]][_touch["col"]] = None
+            drop_stats()
+        timer.set_timeout(render, 0)
+    finally:
         _touch.clear()
-        return
-    if sq:
-        dr = int(sq.attrs["data-row"])
-        dc = int(sq.attrs["data-col"])
-        if _touch.get("type") == "board":
-            sr, sc = _touch["row"], _touch["col"]
-            if not (sr == dr and sc == dc):
-                state.board[sr][sc] = None
-        state.board[dr][dc] = piece
-        drop_stats()
-        render()
-    elif _touch.get("type") == "board":
-        state.board[_touch["row"]][_touch["col"]] = None
-        drop_stats()
-        render()
-    _touch.clear()
 
 
 def build_panel(color):
@@ -362,6 +360,8 @@ def update_stats_bar():
 
 def render():
     """Re-render the entire chess layout: panels, board, flip button, stats bar."""
+    for g in document.querySelectorAll(".touch-ghost"):
+        g.style.display = "none"
     layout = document["chess-layout"]
     layout.clear()
     layout <= build_panel("w")
