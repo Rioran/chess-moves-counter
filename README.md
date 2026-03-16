@@ -2,7 +2,7 @@
 
 A browser-based chess board editor that counts legal moves from any custom position. Built with pure Python in the browser via [Brython](https://brython.info/) — no backend required.
 
-Hosted on (fill later)
+Hosted on https://rioran.github.io/chess-moves-counter/
 
 ![Move count demo](count_demo.jpg)
 
