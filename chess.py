@@ -2,7 +2,7 @@ from browser import document, html, bind, timer
 
 from constants import ORDER, W_CHR, B_CHR, START
 from state import state
-from moves import count_moves
+from moves import count_tree, apply_move, find_king, is_in_check
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -32,14 +32,57 @@ def clear_hover():
 
 
 def drop_stats():
-    """Clear stats so they disappear on the next render."""
+    """Clear all computed stats and mate-view state."""
     state.stats_shown = False
-    state.stats = None
+    state.turn_stats = []
+    state.targets_combined = {}
+    state.computing = False
+    state.mate_view = None
+    state.board_saved = None
 
 
 def current_color():
     """Return 'w' or 'b' based on the current state of the whose-turn button."""
-    return "w" if document["wtg-btn"].textContent == "White to go" else "b"
+    return "w" if document["wtg-btn"].textContent == "Go, White!" else "b"
+
+
+# ── Mate preview helpers ────────────────────────────────────────────────────────
+def _apply_mate_path(base_board, path):
+    """Apply a sequence of moves to base_board and store the result in state.board."""
+    b = [r[:] for r in base_board]
+    for move in path:
+        b = apply_move(b, move)
+    state.board = b
+
+
+def on_mate_click(ev):
+    """Cycle through stored mate positions for the clicked ply."""
+    ply_idx = int(ev.target.attrs["data-ply"])
+    stat = state.turn_stats[ply_idx]
+    mates = stat["mates"]
+    if not mates:
+        return
+
+    if state.mate_view and state.mate_view["ply_idx"] == ply_idx:
+        next_idx = state.mate_view["mate_idx"] + 1
+        if next_idx >= len(mates):
+            # Restore board and exit mate view
+            state.board = state.board_saved
+            state.board_saved = None
+            state.mate_view = None
+        else:
+            state.mate_view["mate_idx"] = next_idx
+            _apply_mate_path(state.board_saved, mates[next_idx])
+    else:
+        # Enter mate view (possibly switching from a different ply)
+        if state.mate_view:
+            state.board = state.board_saved
+        else:
+            state.board_saved = [r[:] for r in state.board]
+        state.mate_view = {"ply_idx": ply_idx, "mate_idx": 0}
+        _apply_mate_path(state.board_saved, mates[0])
+
+    render()
 
 
 def update_move_state(src_type, piece, src_row, src_col, dst_row, dst_col):
@@ -276,19 +319,20 @@ def touch_end(ev):
 
 def build_panel(color):
     """Build and return the draggable piece panel for the given color ('w'/'b')."""
+    in_mate_view = state.mate_view is not None
     panel = html.DIV(Class="piece-panel")
-    panel <= html.DIV("White" if color == "w" else "Black", Class="panel-title")
     cmap = W_CHR if color == "w" else B_CHR
     for p in ORDER:
         code = color + p
         item = html.DIV(cmap[p], Class=f"piece-item piece-{color}")
-        item.attrs["draggable"] = "true"
         item.attrs["data-piece"] = code
-        item.bind("dragstart", panel_dragstart)
-        item.bind("dragend", any_dragend)
-        item.bind("touchstart", touch_start)
-        item.bind("touchmove", touch_move)
-        item.bind("touchend", touch_end)
+        if not in_mate_view:
+            item.attrs["draggable"] = "true"
+            item.bind("dragstart", panel_dragstart)
+            item.bind("dragend", any_dragend)
+            item.bind("touchstart", touch_start)
+            item.bind("touchmove", touch_move)
+            item.bind("touchend", touch_end)
         panel <= item
     return panel
 
@@ -297,13 +341,23 @@ def build_board():
     """Build and return the full board DOM element including rank/file labels."""
     rows = list(range(8)) if state.white_persp else list(range(7, -1, -1))
     cols = list(range(8)) if state.white_persp else list(range(7, -1, -1))
-    targets = state.stats[2] if (state.stats_shown and state.stats) else {}
+    targets = state.targets_combined if state.stats_shown else {}
+    in_mate_view = state.mate_view is not None
+
+    # Find the mated king when previewing a mate
+    mated_pos = None
+    if in_mate_view:
+        for color in ("w", "b"):
+            if is_in_check(state.board, color):
+                mated_pos = find_king(state.board, color)
+                break
 
     area = html.DIV(Class="board-area")
     br_wrap = html.DIV(Class="board-and-ranks")
     rank_col_l = html.DIV(Class="rank-col")
     rank_col_r = html.DIV(Class="rank-col")
-    board_el = html.DIV(Class="board")
+    board_cls = "board board-preview" if in_mate_view else "board"
+    board_el = html.DIV(Class=board_cls)
 
     # Top file row
     frow_top = html.DIV(Class="file-row file-row-top")
@@ -334,15 +388,16 @@ def build_board():
             if piece:
                 color_cls = "piece-w" if piece[0] == "w" else "piece-b"
                 span = html.SPAN(glyph(piece), Class=f"piece-on-board {color_cls}")
-                span.attrs["draggable"] = "true"
                 span.attrs["data-piece"] = piece
                 span.attrs["data-row"] = str(row)
                 span.attrs["data-col"] = str(col)
-                span.bind("dragstart", board_dragstart)
-                span.bind("dragend", any_dragend)
-                span.bind("touchstart", touch_start)
-                span.bind("touchmove", touch_move)
-                span.bind("touchend", touch_end)
+                if not in_mate_view:
+                    span.attrs["draggable"] = "true"
+                    span.bind("dragstart", board_dragstart)
+                    span.bind("dragend", any_dragend)
+                    span.bind("touchstart", touch_start)
+                    span.bind("touchmove", touch_move)
+                    span.bind("touchend", touch_end)
                 sq <= span
 
                 # En passant indicator: two arrows showing the pawn's travel direction
@@ -362,15 +417,20 @@ def build_board():
                     if can_castle:
                         sq <= html.SPAN("⛨", Class="castle-indicator")
 
+            # Mated king cross (shown in mate preview)
+            if mated_pos == (row, col):
+                sq <= html.SPAN("✕", Class="king-cross")
+
             # Move-count badge
             count = targets.get((row, col), 0)
             if count > 0:
                 sq <= html.SPAN(str(count), Class="sq-move-count")
 
-            sq.bind("dragenter", sq_dragenter)
-            sq.bind("dragover", sq_dragover)
-            sq.bind("dragleave", sq_dragleave)
-            sq.bind("drop", sq_drop)
+            if not in_mate_view:
+                sq.bind("dragenter", sq_dragenter)
+                sq.bind("dragover", sq_dragover)
+                sq.bind("dragleave", sq_dragleave)
+                sq.bind("drop", sq_drop)
             row_div <= sq
 
         board_el <= row_div
@@ -392,21 +452,50 @@ def build_board():
 
 
 def update_stats_bar():
-    """Refresh the stats bar text and visibility from current state."""
+    """Rebuild the stats bar from current state."""
     bar = document["stats-bar"]
-    if state.stats_shown and state.stats is not None:
-        total, mate, _targets, in_chk = state.stats
-        color_name = "White" if current_color() == "w" else "Black"
-        if total == 0:
-            text = f"{color_name} is in checkmate" if in_chk else "Stalemate"
-        else:
-            mate_txt = (f"{mate} lead" if mate != 1 else "1 leads") + " to checkmate"
-            text = f"{color_name} has {total} moves, {mate_txt}"
-        bar.textContent = text
+    bar.clear()
+
+    if state.computing:
+        bar <= html.SPAN("Computing…")
         bar.classList.remove("hidden")
-    else:
-        bar.textContent = ""
+        return
+
+    if not state.stats_shown or not state.turn_stats:
         bar.classList.add("hidden")
+        return
+
+    bar.classList.remove("hidden")
+    for i, stat in enumerate(state.turn_stats):
+        if stat["color"] is None:
+            continue
+        color_name = "White" if stat["color"] == "w" else "Black"
+        total = stat["total"]
+        mc = stat["mate_count"]
+        mates = stat["mates"]
+        line = html.DIV(Class="turn-line")
+        prefix = f"Move {i + 1} - {color_name}: {total} moves"
+        if mc > 0:
+            s = "" if mc == 1 else "s"
+            if i == 0:
+                mate_label = f"{mc} mate{s}"
+            else:
+                mate_label = f"new {mc} mate{s}"
+            if state.mate_view and state.mate_view["ply_idx"] == i:
+                mid = state.mate_view["mate_idx"]
+                btn_text = f"{mid + 1} / {len(mates)} mates"
+            else:
+                btn_text = mate_label
+            line <= f"{prefix}, "
+            btn = html.SPAN(btn_text, Class="mate-btn")
+            btn.attrs["data-ply"] = str(i)
+            btn.bind("click", on_mate_click)
+            line <= btn
+        else:
+            line <= prefix
+        if stat["truncated"]:
+            line <= html.SPAN(" ⚠", Class="truncated-warn")
+        bar <= line
 
 
 def render():
@@ -418,9 +507,11 @@ def render():
     layout <= build_panel("w")
     layout <= build_board()
     layout <= build_panel("b")
-    document["flip-btn"].textContent = (
-        "View from Black" if state.white_persp else "View from White"
-    )
+    flip_btn = document["flip-btn"]
+    if state.white_persp:
+        flip_btn.classList.replace("flip-black", "flip-white")
+    else:
+        flip_btn.classList.replace("flip-white", "flip-black")
     update_stats_bar()
 
 
@@ -429,9 +520,12 @@ def render():
 def on_wtg(ev):
     """Toggle the active side between White and Black, then re-render."""
     btn = ev.target
-    btn.textContent = (
-        "Black to go" if btn.textContent == "White to go" else "White to go"
-    )
+    if btn.textContent == "Go, White!":
+        btn.textContent = "Go, Black!"
+        btn.classList.replace("wtg-white", "wtg-black")
+    else:
+        btn.textContent = "Go, White!"
+        btn.classList.replace("wtg-black", "wtg-white")
     drop_stats()
     render()
 
@@ -439,17 +533,20 @@ def on_wtg(ev):
 @bind(document["toggle-btn"], "click")
 def on_toggle(ev):
     """Switch between the starting position and an empty board, then re-render."""
+    # Exit mate view (board will be replaced anyway)
+    state.mate_view = None
+    state.board_saved = None
     state.start_active = not state.start_active
     if state.start_active:
         state.board = [r[:] for r in START]
         state.castle_w = True
         state.castle_b = True
-        ev.target.textContent = "Empty board"
+        ev.target.textContent = "🗑"
     else:
         state.board = [[None] * 8 for _ in range(8)]
         state.castle_w = False
         state.castle_b = False
-        ev.target.textContent = "Start placement"
+        ev.target.textContent = "↺"
     state.ep_pawn = None
     drop_stats()
     render()
@@ -462,15 +559,64 @@ def on_flip(ev):
     render()
 
 
+@bind(document["depth-up"], "click")
+def on_depth_up(ev):
+    """Increment the depth input (max 6)."""
+    el = document["depth-input"]
+    try:
+        val = int(el.value or "1")
+    except Exception:
+        val = 1
+    if val < 6:
+        el.value = str(val + 1)
+
+
+@bind(document["depth-down"], "click")
+def on_depth_down(ev):
+    """Decrement the depth input (min 1)."""
+    el = document["depth-input"]
+    try:
+        val = int(el.value or "1")
+    except Exception:
+        val = 1
+    if val > 1:
+        el.value = str(val - 1)
+
+
 @bind(document["count-btn"], "click")
 def on_count(ev):
-    """Toggle move-count stats: compute and show them, or clear if already shown."""
-    if state.stats_shown:
-        drop_stats()
-    else:
-        state.stats = count_moves(state.board, current_color(), state.ep_pawn)
-        state.stats_shown = True
+    """Run the move-count tree walk for the selected depth and show results."""
+    # Exit any active mate preview and restore the original board
+    if state.mate_view:
+        state.board = state.board_saved
+        state.board_saved = None
+    drop_stats()
+
+    depth_el = document["depth-input"]
+    try:
+        depth = max(1, min(6, int(depth_el.value or "1")))
+    except Exception:
+        depth = 1
+
+    state.computing = True
     render()
+
+    def do_compute():
+        ply_stats, targets = count_tree(
+            state.board,
+            current_color(),
+            state.ep_pawn,
+            state.castle_w,
+            state.castle_b,
+            depth,
+        )
+        state.turn_stats = ply_stats
+        state.targets_combined = targets
+        state.stats_shown = True
+        state.computing = False
+        render()
+
+    timer.set_timeout(do_compute, 50)
 
 
 render()

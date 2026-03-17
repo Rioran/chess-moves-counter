@@ -27,7 +27,7 @@ h1 {
 /* ── Controls ───────────────────────────────────────── */
 .controls {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: 14px;
     flex-wrap: wrap;
     justify-content: center;
@@ -47,6 +47,64 @@ h1 {
     transition: background 0.2s, color 0.2s;
 }
 .btn:hover { background: #6ab85a; color: #f5fff3; }
+
+/* ── White / Black side button states ───────────────────── */
+.btn.wtg-white, .btn.flip-white {
+    background: #ffffff;
+    color: #1a1a1a;
+    border-color: #1a1a1a;
+}
+.btn.wtg-white:hover, .btn.flip-white:hover {
+    background: #e8e8e8;
+    color: #1a1a1a;
+}
+.btn.wtg-black, .btn.flip-black {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+.btn.wtg-black:hover, .btn.flip-black:hover {
+    background: #383838;
+    color: #ffffff;
+}
+
+/* ── Button groups ───────────────────────────────────────── */
+.btn-group {
+    display: flex;
+    align-items: stretch;
+    border: 2px solid #6ab85a;
+    border-radius: 8px;
+    overflow: hidden;
+    flex: 1;
+}
+
+/* Buttons inside a group share the group outline */
+.btn-group > .btn {
+    border: none;
+    border-right: 1px solid rgba(106, 184, 90, 0.35);
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+.btn-group > .btn:last-child { border-right: none; }
+
+/* Divider tint when adjacent to a coloured button */
+.btn-group > .btn.wtg-white,
+.btn-group > .btn.flip-white {
+    border-right-color: rgba(26, 26, 26, 0.2);
+}
+.btn-group > .btn.wtg-black,
+.btn-group > .btn.flip-black {
+    border-right-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Count group: no internal divider; count button fills available width */
+#count-group > .btn { border-right: none; flex: 1; }
+
+/* Setup group: "Go" button stretches to fill spare width */
+#wtg-btn { flex: 1; }
 
 /* ── Stats bar ──────────────────────────────────────── */
 .stats-bar {
@@ -108,7 +166,7 @@ h1 {
 .board-and-ranks {
     display: flex;
     align-items: stretch;
-    gap: 4px;
+    gap: 8px;
 }
 .rank-col {
     display: flex;
@@ -116,7 +174,7 @@ h1 {
     justify-content: space-around;
 }
 .rlabel {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     color: #7aaa6e;
     width: 16px;
@@ -210,7 +268,7 @@ h1 {
 
 .file-row {
     display: flex;
-    margin-left: 20px;   /* aligns with board (rank-col 16px + gap 4px) */
+    margin-left: 27px;   /* aligns with board squares (rank-col 16px + gap 8px + border 3px) */
 }
 .file-row-top .flabel {
     padding-top: 0;
@@ -218,8 +276,10 @@ h1 {
 }
 .flabel {
     width: var(--sq);
-    text-align: center;
-    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
     font-weight: 700;
     color: #7aaa6e;
     padding-top: 4px;
@@ -305,4 +365,90 @@ h1 {
         font-size: 28px;
         padding: 2px;
     }
+
+    .btn-group { flex-basis: 100%; }
+}
+
+/* ── Depth spinner ───────────────────────────────────────── */
+.depth-wrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    padding: 0 10px;
+}
+.depth-arrows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.depth-arrow {
+    width: 20px;
+    height: 13px;
+    padding: 0;
+    background: transparent;
+    color: #3a7a2a;
+    border: none;
+    cursor: pointer;
+    font-size: 8px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+}
+.depth-arrow:hover { background: rgba(106, 184, 90, 0.3); }
+.depth-input {
+    width: 28px;
+    padding: 2px 0;
+    background: transparent;
+    color: #3a7a2a;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    -moz-appearance: textfield;
+}
+.depth-input::-webkit-outer-spin-button,
+.depth-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* ── Stats turn lines ────────────────────────────────────── */
+.turn-line {
+    padding: 2px 0;
+}
+
+.mate-btn {
+    cursor: pointer;
+    font-weight: 700;
+    text-decoration: underline;
+    color: #3a7a2a;
+}
+.mate-btn:hover { color: #1e5c14; }
+
+.truncated-warn {
+    color: #cc6600;
+    font-size: 12px;
+}
+
+/* ── Mate preview overlay ────────────────────────────────── */
+.board-preview {
+    pointer-events: none;
+    border-color: #666;
+    box-shadow: 0 0 32px rgba(100, 100, 100, 0.2);
+}
+
+/* ── Mated king cross ────────────────────────────────────── */
+.king-cross {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--sq) * 0.88);
+    font-weight: 900;
+    color: rgba(210, 0, 0, 0.9);
+    -webkit-text-stroke: 1.5px rgba(210, 0, 0, 0.9);
+    pointer-events: none;
+    z-index: 10;
+    line-height: 1;
 }

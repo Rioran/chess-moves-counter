@@ -1,3 +1,9 @@
+import time
+
+TREE_TIME_BUDGET = 3.0
+TREE_MATE_CAP = 500
+
+
 def opponent(color):
     """Return the opposing color: 'b' for 'w' and vice versa."""
     return "b" if color == "w" else "w"
@@ -306,3 +312,122 @@ def count_moves(board, color, ep_pawn=None):
                 mate_count += 1
 
     return len(moves), mate_count, targets, in_chk
+
+
+# ── Multi-ply tree walk ──────────────────────────────────────────────────────
+
+def _next_ep_file(move, board, color):
+    """Return the ep_file (column) for the opponent after this pawn push, or None."""
+    fr, fc, tr, tc, _special = move
+    piece = board[fr][fc]
+    if piece and piece[1] == "P":
+        if color == "w" and fr == 6 and tr == 4:
+            return tc
+        if color == "b" and fr == 1 and tr == 3:
+            return tc
+    return None
+
+
+def _next_castling(castling, move, color):
+    """Return updated castling set after color plays move."""
+    fr, fc, tr, tc, special = move
+    nc = set(castling)
+    opp = opponent(color)
+    back = 7 if color == "w" else 0
+    opp_back = 0 if color == "w" else 7
+    if special in ("castle_k", "castle_q"):
+        nc.discard(color + "K")
+        nc.discard(color + "Q")
+    elif fr == back and fc == 4:
+        nc.discard(color + "K")
+        nc.discard(color + "Q")
+    elif fr == back and fc == 7:
+        nc.discard(color + "K")
+    elif fr == back and fc == 0:
+        nc.discard(color + "Q")
+    if tr == opp_back and tc == 7:
+        nc.discard(opp + "K")
+    elif tr == opp_back and tc == 0:
+        nc.discard(opp + "Q")
+    return nc
+
+
+def count_tree(board, start_color, ep_pawn, castle_w, castle_b, max_depth):
+    """
+    Walk the game tree to max_depth plies.
+
+    Returns (ply_stats, targets):
+      ply_stats  -- list of dicts {color, total, mate_count, mates, truncated}
+      targets    -- dict mapping (row, col) to combined landing count across all plies
+    """
+    deadline = time.time() + TREE_TIME_BUDGET if max_depth > 3 else float("inf")
+    start_ep_r = 3 if start_color == "w" else 4
+    init_ep_file = ep_pawn[1] if ep_pawn and ep_pawn[0] == start_ep_r else None
+
+    def _init_castling():
+        c = set()
+        if castle_w and board[7][4] == "wK":
+            if board[7][7] == "wR":
+                c.add("wK")
+            if board[7][0] == "wR":
+                c.add("wQ")
+        if castle_b and board[0][4] == "bK":
+            if board[0][7] == "bR":
+                c.add("bK")
+            if board[0][0] == "bR":
+                c.add("bQ")
+        return c
+
+    ply_stats = [
+        {"color": None, "total": 0, "mate_count": 0, "mates": [], "truncated": False}
+        for _ in range(max_depth)
+    ]
+    targets = {}
+    total_mates = [0]
+    timed_out = [False]
+
+    def walk(board, color, castling, ep_file, path, ply):
+        if timed_out[0]:
+            return
+        if time.time() > deadline:
+            timed_out[0] = True
+            for i in range(ply, max_depth):
+                ply_stats[i]["truncated"] = True
+            return
+
+        stat = ply_stats[ply]
+        stat["color"] = color
+        opp = opponent(color)
+        moves = legal_moves(board, color, castling, ep_file)
+        stat["total"] += len(moves)
+
+        for move in moves:
+            fr, fc, tr, tc, special = move
+            targets[(tr, tc)] = targets.get((tr, tc), 0) + 1
+            if special == "castle_k":
+                targets[(fr, 5)] = targets.get((fr, 5), 0) + 1
+            elif special == "castle_q":
+                targets[(fr, 3)] = targets.get((fr, 3), 0) + 1
+
+            nb = apply_move(board, move)
+            new_castling = _next_castling(castling, move, color)
+            new_ep = _next_ep_file(move, board, color)
+
+            if is_in_check(nb, opp):
+                opp_moves = legal_moves(nb, opp, new_castling, new_ep)
+                if not opp_moves:
+                    stat["mate_count"] += 1
+                    if total_mates[0] < TREE_MATE_CAP:
+                        stat["mates"].append(path + [move])
+                        total_mates[0] += 1
+                    else:
+                        stat["truncated"] = True
+                    continue  # no recursion into mated positions
+
+            if ply + 1 < max_depth:
+                walk(nb, opp, new_castling, new_ep, path + [move], ply + 1)
+                if timed_out[0]:
+                    return
+
+    walk(board, start_color, _init_castling(), init_ep_file, [], 0)
+    return ply_stats, targets

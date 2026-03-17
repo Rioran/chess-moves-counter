@@ -12,10 +12,21 @@
     <h1>Moves Counter</h1>
 
     <div class="controls">
-        <button class="btn" id="wtg-btn">White to go</button>
-        <button class="btn" id="toggle-btn">Empty board</button>
-        <button class="btn" id="flip-btn">View from Black</button>
-        <button class="btn" id="count-btn">Count moves</button>
+        <div class="btn-group">
+            <button class="btn flip-white" id="flip-btn">⇅</button>
+            <button class="btn wtg-white" id="wtg-btn">Go, White!</button>
+            <button class="btn" id="toggle-btn">🗑</button>
+        </div>
+        <div class="btn-group" id="count-group">
+            <button class="btn" id="count-btn">Count moves</button>
+            <div class="depth-wrapper">
+                <input type="number" id="depth-input" class="depth-input" value="1" min="1" max="6">
+                <div class="depth-arrows">
+                    <button class="depth-arrow" id="depth-up" type="button">▲</button>
+                    <button class="depth-arrow" id="depth-down" type="button">▼</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="stats-bar" class="stats-bar hidden"></div>
