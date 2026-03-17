@@ -42,6 +42,27 @@ def current_color():
     return "w" if document["wtg-btn"].textContent == "White to go" else "b"
 
 
+def update_move_state(src_type, piece, src_row, src_col, dst_row, dst_col):
+    """Update en passant pawn and castling rights after a piece is placed or moved."""
+    color, kind = piece[0], piece[1]
+    # En passant: only a 2-square pawn advance from its starting row qualifies
+    if src_type == "board" and kind == "P":
+        if color == "w" and src_row == 6 and dst_row == 4:
+            state.ep_pawn = (dst_row, dst_col)
+        elif color == "b" and src_row == 1 and dst_row == 3:
+            state.ep_pawn = (dst_row, dst_col)
+        else:
+            state.ep_pawn = None
+    else:
+        state.ep_pawn = None
+    # Castling: only a panel placement on the king's home square grants rights
+    if kind == "K":
+        if color == "w":
+            state.castle_w = src_type == "panel" and dst_row == 7 and dst_col == 4
+        else:
+            state.castle_b = src_type == "panel" and dst_row == 0 and dst_col == 4
+
+
 # ── Drag handlers ──────────────────────────────────────────────────────────────
 def panel_dragstart(ev):
     """Record a drag originating from a piece panel (copy semantics)."""
@@ -67,6 +88,7 @@ def any_dragend(ev):
     clear_hover()
     if not state.drop_handled and state.drag_src.get("type") == "board":
         state.board[state.drag_src["row"]][state.drag_src["col"]] = None
+        state.ep_pawn = None
         state.drag_src.clear()
         drop_stats()
         render()
@@ -122,13 +144,16 @@ def sq_drop(ev):
     piece = state.drag_src.get("piece")
     if not piece:
         return
-    if state.drag_src.get("type") == "board":
-        sr, sc = state.drag_src["row"], state.drag_src["col"]
-        if sr == dr and sc == dc:
+    src_type = state.drag_src.get("type")
+    src_row = state.drag_src.get("row")
+    src_col = state.drag_src.get("col")
+    if src_type == "board":
+        if src_row == dr and src_col == dc:
             state.drag_src.clear()
             return
-        state.board[sr][sc] = None
+        state.board[src_row][src_col] = None
     state.board[dr][dc] = piece
+    update_move_state(src_type, piece, src_row, src_col, dr, dc)
     state.drop_handled = True
     state.drag_src.clear()
     drop_stats()
@@ -232,8 +257,17 @@ def touch_end(ev):
                     if not (sr == dr and sc == dc):
                         state.board[sr][sc] = None
                 state.board[dr][dc] = piece
+                update_move_state(
+                    _touch.get("type"),
+                    piece,
+                    _touch.get("row"),
+                    _touch.get("col"),
+                    dr,
+                    dc,
+                )
             elif _touch.get("type") == "board":
                 state.board[_touch["row"]][_touch["col"]] = None
+                state.ep_pawn = None
             drop_stats()
         timer.set_timeout(render, 0)
     finally:
@@ -310,6 +344,23 @@ def build_board():
                 span.bind("touchmove", touch_move)
                 span.bind("touchend", touch_end)
                 sq <= span
+
+                # En passant indicator: two arrows showing the pawn's travel direction
+                if state.ep_pawn == (row, col):
+                    arrow_up = (piece[0] == "w") == state.white_persp
+                    arrow = "▲" if arrow_up else "▼"
+                    ep_div = html.DIV(Class="ep-indicator")
+                    ep_div <= html.SPAN(arrow, Class="ep-arrow")
+                    ep_div <= html.SPAN(arrow, Class="ep-arrow")
+                    sq <= ep_div
+
+                # Castle indicator: tower icon when king retains castling rights
+                if piece[1] == "K":
+                    can_castle = (
+                        piece[0] == "w" and row == 7 and col == 4 and state.castle_w
+                    ) or (piece[0] == "b" and row == 0 and col == 4 and state.castle_b)
+                    if can_castle:
+                        sq <= html.SPAN("⛨", Class="castle-indicator")
 
             # Move-count badge
             count = targets.get((row, col), 0)
@@ -391,10 +442,15 @@ def on_toggle(ev):
     state.start_active = not state.start_active
     if state.start_active:
         state.board = [r[:] for r in START]
+        state.castle_w = True
+        state.castle_b = True
         ev.target.textContent = "Empty board"
     else:
         state.board = [[None] * 8 for _ in range(8)]
+        state.castle_w = False
+        state.castle_b = False
         ev.target.textContent = "Start placement"
+    state.ep_pawn = None
     drop_stats()
     render()
 
@@ -412,7 +468,7 @@ def on_count(ev):
     if state.stats_shown:
         drop_stats()
     else:
-        state.stats = count_moves(state.board, current_color())
+        state.stats = count_moves(state.board, current_color(), state.ep_pawn)
         state.stats_shown = True
     render()
 

@@ -270,7 +270,7 @@ def detect_castling(board):
     return c
 
 
-def count_moves(board, color):
+def count_moves(board, color, ep_pawn=None):
     """
     Return move statistics for color as (total, mate_count, targets, in_check).
 
@@ -278,9 +278,12 @@ def count_moves(board, color):
     mate_count -- subset of moves that deliver immediate checkmate.
     targets    -- dict mapping (row, col) to the number of moves landing there.
     in_check   -- whether color's king is currently in check.
+    ep_pawn    -- (row, col) of the pawn eligible for en passant capture, or None.
     """
     castling = detect_castling(board)
-    moves = legal_moves(board, color, castling, None)
+    ep_r = 3 if color == "w" else 4
+    ep_file = ep_pawn[1] if ep_pawn and ep_pawn[0] == ep_r else None
+    moves = legal_moves(board, color, castling, ep_file)
     in_chk = is_in_check(board, color)
     opp = opponent(color)
 
@@ -288,8 +291,13 @@ def count_moves(board, color):
     mate_count = 0
 
     for move in moves:
-        tr, tc = move[2], move[3]
+        fr, fc, tr, tc, special = move
         targets[(tr, tc)] = targets.get((tr, tc), 0) + 1
+        # Castling moves the rook too — mark its destination square as well
+        if special == "castle_k":
+            targets[(fr, 5)] = targets.get((fr, 5), 0) + 1
+        elif special == "castle_q":
+            targets[(fr, 3)] = targets.get((fr, 3), 0) + 1
 
         nb = apply_move(board, move)
         if is_in_check(nb, opp):

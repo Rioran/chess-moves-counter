@@ -12,6 +12,9 @@ class State:
         self.drop_handled = False
         self.stats_shown = False
         self.stats = None  # (total, mate, targets, in_check) or None
+        self.ep_pawn = None  # (row, col) of pawn eligible for en passant capture
+        self.castle_w = True  # White king retains castling rights
+        self.castle_b = True  # Black king retains castling rights
 
 
 state = State()

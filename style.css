@@ -227,6 +227,44 @@ h1 {
     background: rgba(106, 184, 90, 0.35);
 }
 
+/* ── En passant / castle indicators ─────────────────── */
+.ep-indicator {
+    position: absolute;
+    top: 2px;
+    left: 3px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.ep-arrow {
+    display: block;
+    line-height: 1;
+}
+
+.castle-indicator {
+    position: absolute;
+    top: 2px;
+    left: 3px;
+    font-size: 11px;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* Arrows are text — use CSS color directly */
+.sq-light .ep-indicator { color: #2c5521; }
+.sq-dark  .ep-indicator { color: #d4f0c8; }
+
+/* Castle icon is a text character — same color approach as arrows */
+.sq-light .castle-indicator { color: #2c5521; }
+.sq-dark  .castle-indicator { color: #d4f0c8; }
+
 /* ── Touch drag ghost ───────────────────────────────── */
 .touch-ghost {
     position: fixed;
