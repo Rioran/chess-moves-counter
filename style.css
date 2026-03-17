@@ -177,6 +177,11 @@ h1 {
     z-index: 3;
 }
 
+.sq-light .sq-move-count {
+    background: none;
+    padding: 0;
+}
+
 .piece-on-board {
     line-height: 1;
     user-select: none;
