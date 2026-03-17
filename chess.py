@@ -72,7 +72,7 @@ def on_mate_click(ev):
             state.mate_view = None
         else:
             state.mate_view["mate_idx"] = next_idx
-            _apply_mate_path(state.board_saved, mates[next_idx])
+            _apply_mate_path(state.board_saved, mates[next_idx]["path"])
     else:
         # Enter mate view (possibly switching from a different ply)
         if state.mate_view:
@@ -80,7 +80,7 @@ def on_mate_click(ev):
         else:
             state.board_saved = [r[:] for r in state.board]
         state.mate_view = {"ply_idx": ply_idx, "mate_idx": 0}
-        _apply_mate_path(state.board_saved, mates[0])
+        _apply_mate_path(state.board_saved, mates[0]["path"])
 
     render()
 
@@ -476,21 +476,28 @@ def update_stats_bar():
         line = html.DIV(Class="turn-line")
         prefix = f"Move {i + 1} - {color_name}: {total} moves"
         if mc > 0:
-            s = "" if mc == 1 else "s"
-            if i == 0:
-                mate_label = f"{mc} mate{s}"
-            else:
-                mate_label = f"new {mc} mate{s}"
-            if state.mate_view and state.mate_view["ply_idx"] == i:
+            uc = len(mates)
+            in_view = state.mate_view and state.mate_view["ply_idx"] == i
+            if in_view:
                 mid = state.mate_view["mate_idx"]
-                btn_text = f"{mid + 1} / {len(mates)} mates"
+                occurrences = mates[mid]["count"]
+                if occurrences > 1:
+                    btn_text = f"{mid + 1} x{occurrences} / {uc} unique"
+                else:
+                    btn_text = f"{mid + 1} / {uc} unique"
             else:
-                btn_text = mate_label
+                if uc < mc:
+                    btn_text = f"{uc} unique mates"
+                else:
+                    s = "" if mc == 1 else "s"
+                    btn_text = f"{mc} mate{s}"
             line <= f"{prefix}, "
             btn = html.SPAN(btn_text, Class="mate-btn")
             btn.attrs["data-ply"] = str(i)
             btn.bind("click", on_mate_click)
             line <= btn
+            if uc < mc:
+                line <= f" / {mc} total mates"
         else:
             line <= prefix
         if stat["truncated"]:

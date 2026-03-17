@@ -3,13 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Setup</title>
+    <meta name="description" content="Browser-based chess board editor that counts legal moves from any custom position, including castling and en passant. Features multi-ply game tree analysis with checkmate detection.">
+    <meta name="author" content="rioran">
+    <meta name="theme-color" content="#3a7a2a">
+
+    <meta property="og:title" content="Chess Moves Counter">
+    <meta property="og:description" content="Set up any chess position and instantly count legal moves. Multi-ply tree walk with checkmate detection, castling and en passant support.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://rioran.github.io/chess-moves-counter/">
+
+    <title>Chess Moves Counter</title>
+    <link rel="canonical" href="https://rioran.github.io/chess-moves-counter/">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
     <script src="https://cdn.jsdelivr.net/npm/brython@3.12.4/brython.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/brython@3.12.4/brython_stdlib.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body onload="brython()">
-    <h1>Moves Counter</h1>
+    <h1>Chess Moves Counter</h1>
 
     <div class="controls">
         <div class="btn-group">
@@ -34,5 +46,11 @@
     <div class="chess-layout" id="chess-layout"></div>
 
     <script type="text/python" src="chess.py"></script>
+
+    <footer>
+        <a href="https://github.com/Rioran/chess-moves-counter" target="_blank" rel="noopener noreferrer">Source code</a>
+        <span>·</span>
+        <a href="https://www.linkedin.com/in/rioran/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+    </footer>
 </body>
 </html>

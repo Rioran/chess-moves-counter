@@ -383,7 +383,8 @@ def count_tree(board, start_color, ep_pawn, castle_w, castle_b, max_depth):
         for _ in range(max_depth)
     ]
     targets = {}
-    total_mates = [0]
+    total_uniq = [0]          # global cap on unique mate positions stored
+    ply_mate_maps = [{} for _ in range(max_depth)]  # board_key -> mates list index
     timed_out = [False]
 
     def walk(board, color, castling, ep_file, path, ply):
@@ -417,9 +418,14 @@ def count_tree(board, start_color, ep_pawn, castle_w, castle_b, max_depth):
                 opp_moves = legal_moves(nb, opp, new_castling, new_ep)
                 if not opp_moves:
                     stat["mate_count"] += 1
-                    if total_mates[0] < TREE_MATE_CAP:
-                        stat["mates"].append(path + [move])
-                        total_mates[0] += 1
+                    board_key = tuple(tuple(row) for row in nb)
+                    mate_map = ply_mate_maps[ply]
+                    if board_key in mate_map:
+                        stat["mates"][mate_map[board_key]]["count"] += 1
+                    elif total_uniq[0] < TREE_MATE_CAP:
+                        mate_map[board_key] = len(stat["mates"])
+                        stat["mates"].append({"path": path + [move], "count": 1})
+                        total_uniq[0] += 1
                     else:
                         stat["truncated"] = True
                     continue  # no recursion into mated positions
@@ -430,4 +436,6 @@ def count_tree(board, start_color, ep_pawn, castle_w, castle_b, max_depth):
                     return
 
     walk(board, start_color, _init_castling(), init_ep_file, [], 0)
+    for stat in ply_stats:
+        stat["mates"].sort(key=lambda m: m["count"], reverse=True)
     return ply_stats, targets

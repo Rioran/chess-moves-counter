@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="10" fill="#3a7a2a"/>
+  <text
+    x="17" y="34"
+    font-size="28"
+    font-family="Georgia,'Times New Roman',serif"
+    text-anchor="middle"
+    dominant-baseline="central"
+    fill="#fffff0"
+    stroke="#2c5521"
+    stroke-width="2"
+    paint-order="stroke">×</text>
+  <text
+    x="44" y="34"
+    font-size="40"
+    font-family="Georgia,'Times New Roman',serif"
+    text-anchor="middle"
+    dominant-baseline="central"
+    fill="#fffff0"
+    stroke="#2c5521"
+    stroke-width="2"
+    paint-order="stroke">♙</text>
+</svg>
